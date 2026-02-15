@@ -1,0 +1,898 @@
+--// Services
+local p = game:GetService("Players").LocalPlayer
+local uis = game:GetService("UserInputService")
+local ts = game:GetService("TweenService")
+local rs = game:GetService("RunService")
+local vi = game:GetService("VirtualInputManager")
+local db = game:GetService("Debris")
+local cam = workspace.CurrentCamera
+local l = game:GetService("LocalizationService")
+local ss = game:GetService("SoundService")
+local Players = game:GetService("Players")
+
+--// Shared GUI Root
+local g = Instance.new("ScreenGui", p:WaitForChild("PlayerGui"))
+g.Name = "Kryzen_Ultimate_Suite_Integrated"
+g.ResetOnSpawn = false
+
+--// Global Settings State
+local Settings = {
+    RainbowUI = true,
+    PerformanceMode = false,
+    UITransparency = false,
+    LockPosition = false,
+    StreamerMode = false
+}
+
+local outlineStrokes = {}
+
+-- Utility Function for Rounded Corners
+local function R_Corner(x, r) 
+    local c = Instance.new("UICorner", x)
+    c.CornerRadius = UDim.new(0, r or 6) 
+end
+
+-------------------------------------------------------------------
+-- MUSIC PLAYER
+-------------------------------------------------------------------
+local sound = Instance.new("Sound", ss)
+sound.Name = "KryzenAudio"
+local pitchShift = Instance.new("PitchShiftSoundEffect", sound)
+pitchShift.Octave = 1 
+
+local musicBar = Instance.new("Frame", g)
+musicBar.Size = UDim2.new(0, 400, 0, 40)
+musicBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+R_Corner(musicBar, 6)
+local ms = Instance.new("UIStroke", musicBar)
+ms.Thickness = 1.5
+table.insert(outlineStrokes, ms)
+
+local function CreateInput(text, x, width)
+    local b = Instance.new("TextBox", musicBar)
+    b.Size = UDim2.new(0, width, 0, 24)
+    b.Position = UDim2.new(0, x, 0.5, -12)
+    b.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    b.PlaceholderText = text
+    b.Text = ""
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamSemibold
+    b.TextSize = 11
+    R_Corner(b, 4)
+    return b
+end
+
+local idBox = CreateInput("Audio ID", 8, 90)
+local volBox = CreateInput("Vol", 102, 40)
+local speedBox = CreateInput("Spd", 146, 40)
+
+local playBtn = Instance.new("TextButton", musicBar)
+playBtn.Size = UDim2.new(0, 50, 0, 24)
+playBtn.Position = UDim2.new(0, 192, 0.5, -12)
+playBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+playBtn.Text = "PLAY"
+playBtn.TextColor3 = Color3.new(1, 1, 1)
+playBtn.Font = Enum.Font.GothamBold
+playBtn.TextSize = 11
+R_Corner(playBtn, 4)
+
+local titleLabel = Instance.new("TextLabel", musicBar)
+titleLabel.Size = UDim2.new(0, 140, 1, 0)
+titleLabel.Position = UDim2.new(1, -145, 0, 0)
+titleLabel.Text = "🎶 MUSIC PLAYER 🎶"
+titleLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 11
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+local playing = false
+playBtn.MouseButton1Click:Connect(function()
+    if not playing then
+        local id = idBox.Text:gsub("%D", "")
+        if id ~= "" then
+            sound.Volume = tonumber(volBox.Text) or 1
+            sound.PlaybackSpeed = math.clamp(tonumber(speedBox.Text) or 1, 0.1, 20)
+            sound.SoundId = "rbxassetid://" .. id
+            sound:Play()
+            playing = true
+            playBtn.Text = "STOP"
+            playBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        end
+    else
+        sound:Stop()
+        playing = false
+        playBtn.Text = "PLAY"
+        playBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    end
+end)
+
+-------------------------------------------------------------------
+-- MAIN MENU (COMBAT)
+-------------------------------------------------------------------
+local mainMenu = Instance.new("Frame", g)
+mainMenu.Size = UDim2.new(0, 400, 0, 280)
+mainMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainMenu.Visible = false
+R_Corner(mainMenu, 6)
+local fs = Instance.new("UIStroke", mainMenu)
+fs.Thickness = 2
+table.insert(outlineStrokes, fs)
+
+local t1 = Instance.new("TextLabel", mainMenu)
+t1.Size = UDim2.new(1, 0, 0, 25)
+t1.Text = "KRYZEN scripts"
+t1.TextColor3 = Color3.new(1, 1, 1)
+t1.Font = Enum.Font.GothamBlack
+t1.TextSize = 18
+t1.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+R_Corner(t1, 6)
+
+local sub1 = Instance.new("TextLabel", mainMenu)
+sub1.Size = UDim2.new(1, 0, 0, 15)
+sub1.Position = UDim2.new(0, 0, 0, 25)
+sub1.Text = "script made by: Juring978 in roblox"
+sub1.TextColor3 = Color3.fromRGB(200, 200, 200)
+sub1.BackgroundTransparency = 1
+sub1.Font = Enum.Font.Gotham
+sub1.TextSize = 11
+
+local s_state = { aim = false, fly = false, ab = false }
+local target, vel, blk = nil, nil, false
+
+local function CreateMenuButton(text, y, callback)
+    local btnFrame = Instance.new("Frame", mainMenu)
+    btnFrame.Size = UDim2.new(0, 150, 0, 35)
+    btnFrame.Position = UDim2.new(0, 10, 0, y)
+    btnFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    R_Corner(btnFrame, 6)
+    local s = Instance.new("UIStroke", btnFrame)
+    s.Thickness = 1.5
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    table.insert(outlineStrokes, s)
+    local btn = Instance.new("TextButton", btnFrame)
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.MouseButton1Click:Connect(callback)
+    return btn, btnFrame
+end
+
+local aBtn = CreateMenuButton("Aimlock: OFF", 50, function() s_state.aim = not s_state.aim target = nil end)
+CreateMenuButton("Fly (Manual)", 90, function()
+    s_state.fly = not s_state.fly
+    local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+    if not s_state.fly and vel then vel:Destroy() vel = nil
+    elseif s_state.fly and hrp then
+        vel = Instance.new("BodyVelocity", hrp)
+        vel.Velocity = Vector3.new(0, 50, 0)
+        vel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    end
+end)
+CreateMenuButton("Reset (Invincible)", 130, function()
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = p.Character.HumanoidRootPart.Position
+        p.Character:BreakJoints()
+        p.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = CFrame.new(pos)
+    end
+end)
+local abBtn, abFrame = CreateMenuButton("AutoBlock: OFF", 170, function() s_state.ab = not s_state.ab end)
+
+-- STATS
+local v_vals = { Health = 1, Speed = 0.1, Jump = 0.25 }
+local bars = {}
+local stat_list = {
+    { "Health", Color3.fromRGB(0, 132, 255), function(x) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.Health = math.floor(x * 100) end end },
+    { "Speed", Color3.fromRGB(0, 132, 255), function(x) end }, -- handled in loop
+    { "Jump", Color3.fromRGB(0, 132, 255), function(x) end }
+}
+
+for i, s_inf in ipairs(stat_list) do
+    local fr = Instance.new("Frame", mainMenu)
+    fr.Size = UDim2.new(0, 55, 0, 150)
+    fr.Position = UDim2.new(0, 185 + (i - 1) * 68, 0.5, -70)
+    fr.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    R_Corner(fr, 6)
+    local barStroke = Instance.new("UIStroke", fr)
+    barStroke.Thickness = 1.5
+    barStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    table.insert(outlineStrokes, barStroke)
+    
+    local l_txt = Instance.new("TextLabel", fr)
+    l_txt.Size = UDim2.new(1, 0, 0, 18)
+    l_txt.Position = UDim2.new(0, 0, -0.15, 0)
+    l_txt.Text = s_inf[1]
+    l_txt.TextColor3 = Color3.new(1, 1, 1)
+    l_txt.Font = Enum.Font.GothamBold
+    l_txt.TextSize = 11
+    l_txt.BackgroundTransparency = 1
+    
+    local bg = Instance.new("Frame", fr)
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    R_Corner(bg, 6)
+    
+    local fill = Instance.new("Frame", bg)
+    fill.BackgroundColor3 = s_inf[2]
+    R_Corner(fill, 6)
+    
+    local prc = Instance.new("TextLabel", fr)
+    prc.Size = UDim2.new(1, 0, 0, 15)
+    prc.Position = UDim2.new(0, 0, 1, 2)
+    prc.TextColor3 = Color3.new(1, 1, 1)
+    prc.Font = Enum.Font.GothamBold
+    prc.TextSize = 10
+    prc.BackgroundTransparency = 1
+    
+    local dwn = false
+    bg.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then dwn = true end end)
+    bg.InputEnded:Connect(function() dwn = false end)
+    bg.InputChanged:Connect(function(inp)
+        if dwn and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+            local py = math.clamp(1 - (inp.Position.Y - bg.AbsolutePosition.Y) / bg.AbsoluteSize.Y, 0, 1)
+            v_vals[s_inf[1]] = py
+            if s_inf[1] == "Health" then s_inf[3](py) end
+        end
+    end)
+    table.insert(bars, { k = s_inf[1], f = fill, t = prc })
+end
+
+local rbFrame = Instance.new("Frame", mainMenu)
+rbFrame.Size = UDim2.new(0, 150, 0, 30)
+rbFrame.Position = UDim2.new(0, 185, 0, 235)
+rbFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+R_Corner(rbFrame, 6)
+local rsS = Instance.new("UIStroke", rbFrame)
+rsS.Thickness = 1.5
+rsS.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+table.insert(outlineStrokes, rsS)
+local r_btn = Instance.new("TextButton", rbFrame)
+r_btn.Size = UDim2.new(1,0,1,0); r_btn.BackgroundTransparency = 1; r_btn.Text = "Reset to Default"; r_btn.TextColor3 = Color3.new(1,1,1); r_btn.Font = Enum.Font.GothamBold; r_btn.TextSize = 11
+r_btn.MouseButton1Click:Connect(function() 
+    v_vals["Health"] = 1
+    v_vals["Speed"] = 0 -- Reset speed boost to 0 (which is 16 walkspeed)
+    v_vals["Jump"] = 0.25 
+end)
+
+local pingLbl = Instance.new("TextLabel", mainMenu)
+pingLbl.Size = UDim2.new(0, 250, 0, 15)
+pingLbl.Position = UDim2.new(0, 10, 1, -20)
+pingLbl.BackgroundTransparency = 1; pingLbl.TextColor3 = Color3.new(1,1,1); pingLbl.Font = Enum.Font.Gotham; pingLbl.TextSize = 10
+pingLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+-------------------------------------------------------------------
+-- POWER SUITE
+-------------------------------------------------------------------
+local powerSuite = Instance.new("Frame", g)
+powerSuite.Size = UDim2.new(0, 400, 0, 280)
+powerSuite.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+powerSuite.Visible = false
+R_Corner(powerSuite, 8)
+local psStroke = Instance.new("UIStroke", powerSuite)
+psStroke.Thickness = 2
+psStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+table.insert(outlineStrokes, psStroke)
+
+local t2 = Instance.new("TextLabel", powerSuite)
+t2.Size = UDim2.new(1, 0, 0, 30)
+t2.Text = "KRYZEN scripts"
+t2.TextColor3 = Color3.new(1, 1, 1)
+t2.Font = Enum.Font.GothamBlack
+t2.TextSize = 22
+t2.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+R_Corner(t2, 8)
+
+local sub2 = Instance.new("TextLabel", powerSuite)
+sub2.Size = UDim2.new(1, 0, 0, 20)
+sub2.Position = UDim2.new(0, 0, 0, 30)
+sub2.Text = "script made by: Juring978 in roblox"
+sub2.TextColor3 = Color3.fromRGB(200, 200, 200)
+sub2.BackgroundTransparency = 1
+sub2.Font = Enum.Font.Gotham
+sub2.TextSize = 13
+
+local container = Instance.new("ScrollingFrame", powerSuite)
+container.Size = UDim2.new(1, -20, 1, -70)
+container.Position = UDim2.new(0, 10, 0, 60)
+container.BackgroundTransparency = 1
+container.BorderSizePixel = 0
+container.CanvasSize = UDim2.new(0, 0, 0, 1100)
+container.ScrollBarThickness = 4
+
+local layout2 = Instance.new("UIListLayout", container)
+layout2.Padding = UDim.new(0, 8)
+
+local function CreatePowerBtn(txt, color, font, func)
+    local b = Instance.new("TextButton", container)
+    b.Size = UDim2.new(1, -6, 0, 40)
+    b.Text = txt; b.BackgroundColor3 = color; b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = font or Enum.Font.GothamBold; b.TextSize = 14; R_Corner(b, 8)
+    local s = Instance.new("UIStroke", b)
+    s.Thickness = 2
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    table.insert(outlineStrokes, s)
+    b.MouseButton1Click:Connect(func)
+    return b
+end
+
+local targetInp = Instance.new("TextBox", container)
+targetInp.Size = UDim2.new(1, -6, 0, 40); targetInp.PlaceholderText = "Target Name..."; targetInp.BackgroundColor3 = Color3.fromRGB(45, 45, 45); targetInp.TextColor3 = Color3.new(1, 1, 1); targetInp.Font = Enum.Font.Antique; R_Corner(targetInp, 8)
+local tsStroke = Instance.new("UIStroke", targetInp)
+tsStroke.Thickness = 2
+tsStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+table.insert(outlineStrokes, tsStroke)
+
+local function getTarget()
+    local tName = targetInp.Text:lower()
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Name:lower():sub(1, #tName) == tName or v.DisplayName:lower():sub(1, #tName) == tName then return v end
+    end
+end
+
+CreatePowerBtn("FLING", Color3.fromRGB(200, 0, 0), Enum.Font.Antique, function()
+    local target = getTarget()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local char = p.Character; local hrp = char.HumanoidRootPart; local oldPos = hrp.CFrame
+        local connection; local start = tick()
+        connection = rs.PostSimulation:Connect(function()
+            if tick() - start > 0.75 then connection:Disconnect(); hrp.Velocity = Vector3.zero; hrp.RotVelocity = Vector3.zero; hrp.CFrame = oldPos return end
+            for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
+            hrp.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.Angles(math.random(), math.random(), math.random())
+            hrp.Velocity = Vector3.new(0, 5000, 0); hrp.RotVelocity = Vector3.new(0, 99999, 0)
+        end)
+    end
+end)
+
+local orbC
+CreatePowerBtn("ORBIT", Color3.fromRGB(0, 120, 255), Enum.Font.Antique, function()
+    if orbC then orbC:Disconnect(); orbC = nil return end
+    local target = getTarget()
+    if target and target.Character then
+        orbC = rs.Heartbeat:Connect(function()
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart"); local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and tHrp then
+                local offset = Vector3.new(math.cos(tick()*10)*5, 0, math.sin(tick()*10)*5)
+                hrp.CFrame = CFrame.new(tHrp.Position + offset, tHrp.Position)
+            end
+        end)
+    end
+end)
+
+local afterimageActive = false; local curPhantomColor = Color3.new(1,1,1); local lastPhanPos = Vector3.zero
+local phanTypes = {{"Cyan Phantom", Color3.fromRGB(0, 255, 255)}, {"Yellow Phantom", Color3.fromRGB(255, 255, 0)}, {"Red Phantom", Color3.fromRGB(255, 0, 0)}, {"Purple Phantom", Color3.fromRGB(170, 0, 255)}}
+for _, v in pairs(phanTypes) do
+    CreatePowerBtn(v[1], Color3.fromRGB(45, 45, 45), Enum.Font.Antique, function() afterimageActive = true; curPhantomColor = v[2] end)
+end
+CreatePowerBtn("PHANTOM OFF", Color3.fromRGB(80, 20, 20), Enum.Font.Antique, function() afterimageActive = false end)
+
+local function applyAura(name)
+    local char = p.Character; if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    for _, v in pairs(char:GetDescendants()) do if v.Name == "AuraEffect" then v:Destroy() end end
+    if name == "Inferno Rage 🔥" then
+        local f = Instance.new("Fire", root); f.Name = "AuraEffect"; f.Color = Color3.fromRGB(255, 100, 0); f.SecondaryColor = Color3.fromRGB(255, 0, 0); f.Size = 10; f.Heat = 15
+        local h = Instance.new("Highlight", char); h.Name = "AuraEffect"; h.OutlineColor = Color3.fromRGB(255, 50, 0); h.FillTransparency = 0.8
+    elseif name == "Thunder Overdrive ⚡" then
+        local s = Instance.new("Sparkles", root); s.Name = "AuraEffect"; s.SparkleColor = Color3.fromRGB(0, 255, 255)
+        local pe = Instance.new("ParticleEmitter", root); pe.Name = "AuraEffect"; pe.LightEmission = 1; pe.Size = NumberSequence.new(2); pe.Speed = NumberRange.new(10); pe.Rate = 100
+    elseif name == "Blood Reaper 🩸" then
+        local sm = Instance.new("Smoke", root); sm.Name = "AuraEffect"; sm.Color = Color3.fromRGB(100, 0, 0); sm.Opacity = 0.5; sm.RiseVelocity = 5
+        local h = Instance.new("Highlight", char); h.Name = "AuraEffect"; h.FillColor = Color3.fromRGB(50, 0, 0); h.OutlineColor = Color3.new(0,0,0)
+    elseif name == "Void Ascendant 🌌" then
+        local h = Instance.new("Highlight", char); h.Name = "AuraEffect"; h.FillColor = Color3.fromRGB(40, 0, 80); h.OutlineColor = Color3.fromRGB(180, 0, 255)
+        local s = Instance.new("Sparkles", root); s.Name = "AuraEffect"; s.SparkleColor = Color3.fromRGB(150, 0, 255)
+    elseif name == "Frost Dominator 🥶" then
+        local sm = Instance.new("Smoke", root); sm.Name = "AuraEffect"; sm.Color = Color3.fromRGB(200, 255, 255); sm.Size = 0.1
+        local s = Instance.new("Sparkles", root); s.Name = "AuraEffect"; s.SparkleColor = Color3.new(1,1,1)
+    elseif name == "Shockwave Titan 🥊" then
+        local h = Instance.new("Highlight", char); h.Name = "AuraEffect"; h.FillColor = Color3.new(1,1,1); h.FillTransparency = 0.5; h.OutlineColor = Color3.fromRGB(200, 200, 200)
+    end
+end
+
+local auraList = {"Inferno Rage 🔥", "Thunder Overdrive ⚡", "Blood Reaper 🩸", "Void Ascendant 🌌", "Frost Dominator 🥶", "Shockwave Titan 🥊"}
+for _, n in pairs(auraList) do CreatePowerBtn(n, Color3.fromRGB(55, 55, 55), nil, function() applyAura(n) end) end
+CreatePowerBtn("Remove Aura", Color3.fromRGB(120, 40, 40), nil, function() for _, v in pairs(p.Character:GetDescendants()) do if v.Name == "AuraEffect" then v:Destroy() end end end)
+
+local function applyTitle(text, colorSeq)
+    local char = p.Character; if not char or not char:FindFirstChild("Head") then return end
+    if char.Head:FindFirstChild("CustomTitle") then char.Head.CustomTitle:Destroy() end
+    local bb = Instance.new("BillboardGui", char.Head); bb.Name = "CustomTitle"; bb.Size = UDim2.new(0, 350, 0, 70); bb.StudsOffset = Vector3.new(0, 4, 0); bb.AlwaysOnTop = true
+    local lbl = Instance.new("TextLabel", bb); lbl.BackgroundTransparency = 1; lbl.Size = UDim2.new(1, 0, 1, 0); lbl.Text = text; lbl.Font = Enum.Font.Antique; lbl.TextSize = 42; lbl.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UIStroke", lbl).Thickness = 3
+    local grad = Instance.new("UIGradient", lbl); grad.Color = colorSeq; grad.Rotation = 15
+    task.spawn(function() while grad.Parent do for i = -1, 1, 0.05 do grad.Offset = Vector2.new(i, 0) task.wait(0.02) end task.wait(1.5) end end)
+end
+
+local titleData = {
+    {n = "The Hero Hunter", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))})},
+    {n = "The honored one", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 200, 255)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))})},
+    {n = "Thunder God", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 255)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(138, 43, 226))})},
+    {n = "The sword of Kira", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 0, 0)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 50, 50))})},
+    {n = "Manipulator of society", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 0, 150))})},
+    {n = "Unbounded Legend", c = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))})}
+}
+for _, d in pairs(titleData) do CreatePowerBtn(d.n, Color3.fromRGB(35, 35, 35), Enum.Font.Antique, function() applyTitle(d.n, d.c) end) end
+CreatePowerBtn("REMOVE TITLE", Color3.fromRGB(150, 0, 0), nil, function() if p.Character and p.Character.Head:FindFirstChild("CustomTitle") then p.Character.Head.CustomTitle:Destroy() end end)
+
+-------------------------------------------------------------------
+-- SETTINGS MENU
+-------------------------------------------------------------------
+local settingsMenu = Instance.new("Frame", g)
+settingsMenu.Size = UDim2.new(0, 400, 0, 280)
+settingsMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+settingsMenu.Visible = false
+R_Corner(settingsMenu, 6)
+local setsStroke = Instance.new("UIStroke", settingsMenu)
+setsStroke.Thickness = 2
+setsStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+table.insert(outlineStrokes, setsStroke)
+
+local t3 = Instance.new("TextLabel", settingsMenu)
+t3.Size = UDim2.new(1, 0, 0, 25)
+t3.Text = "KRYZEN Settings"
+t3.TextColor3 = Color3.new(1, 1, 1)
+t3.Font = Enum.Font.GothamBlack
+t3.TextSize = 18
+t3.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+R_Corner(t3, 6)
+
+local settingsContainer = Instance.new("ScrollingFrame", settingsMenu)
+settingsContainer.Size = UDim2.new(1, -20, 1, -40)
+settingsContainer.Position = UDim2.new(0, 10, 0, 35)
+settingsContainer.BackgroundTransparency = 1
+settingsContainer.BorderSizePixel = 0
+settingsContainer.CanvasSize = UDim2.new(0, 0, 0, 400)
+settingsContainer.ScrollBarThickness = 4
+
+local settingsLayout = Instance.new("UIListLayout", settingsContainer)
+settingsLayout.Padding = UDim.new(0, 5)
+
+--// Toggle Creator
+local function CreateToggle(text, default, callback)
+    local toggleFrame = Instance.new("TextButton", settingsContainer)
+    toggleFrame.Size = UDim2.new(1, -5, 0, 35)
+    toggleFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    toggleFrame.Text = ""
+    R_Corner(toggleFrame, 6)
+    
+    local ts = Instance.new("UIStroke", toggleFrame)
+    ts.Thickness = 1
+    ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    table.insert(outlineStrokes, ts)
+
+    local label = Instance.new("TextLabel", toggleFrame)
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Text = text
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+
+    local indicator = Instance.new("Frame", toggleFrame)
+    indicator.Size = UDim2.new(0, 20, 0, 20)
+    indicator.Position = UDim2.new(1, -30, 0.5, -10)
+    R_Corner(indicator, 4)
+    
+    local state = default
+    local function updateVisuals()
+        game:GetService("TweenService"):Create(indicator, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(255, 50, 50)
+        }):Play()
+    end
+    updateVisuals()
+
+    toggleFrame.MouseButton1Click:Connect(function()
+        state = not state
+        updateVisuals()
+        callback(state)
+    end)
+end
+
+-- 1. Rainbow UI
+CreateToggle("Rainbow UI", true, function(val)
+    Settings.RainbowUI = val
+    if not val then
+        for _, stroke in ipairs(outlineStrokes) do
+            game:GetService("TweenService"):Create(stroke, TweenInfo.new(0.5), {Color = Color3.fromRGB(0, 255, 255)}):Play()
+        end
+    end
+end)
+
+-- 2. Performance Mode
+CreateToggle("Performance Mode", false, function(val)
+    Settings.PerformanceMode = val
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+            v.Enabled = not val
+        end
+    end
+end)
+
+-- 3. UI Transparency
+CreateToggle("UI Transparency", false, function(val)
+    Settings.UITransparency = val
+    local transp = val and 0.4 or 0
+    -- Apply to all main frames
+    local frames = {mainMenu, powerSuite, settingsMenu, musicBar}
+    for _, f in pairs(frames) do
+        game:GetService("TweenService"):Create(f, TweenInfo.new(0.3), {BackgroundTransparency = transp}):Play()
+    end
+end)
+
+-- 4. Lock Position
+CreateToggle("Lock Position", false, function(val)
+    Settings.LockPosition = val
+end)
+
+-- 5. Show FOV (Stub)
+CreateToggle("Show Aimlock FOV", false, function(val)
+    Settings.ShowFOV = val
+end)
+
+-- 6. Streamer Mode
+CreateToggle("Streamer Mode", false, function(val)
+    Settings.StreamerMode = val
+    t1.Text = val and "Hidden Script" or "KRYZEN scripts"
+    sub1.Text = val and "User: Protected" or "script made by: Juring978 in roblox"
+    t2.Text = val and "Hidden Script" or "KRYZEN scripts"
+    sub2.Text = val and "User: Protected" or "script made by: Juring978 in roblox"
+    t3.Text = val and "Hidden Script" or "KRYZEN Settings"
+end)
+
+-------------------------------------------------------------------
+-- MANUAL / HOME MENU
+-------------------------------------------------------------------
+local manualMenu = Instance.new("Frame", g)
+manualMenu.Size = UDim2.new(0, 400, 0, 280) 
+manualMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+manualMenu.ClipsDescendants = true
+manualMenu.Visible = false -- Initially Hidden
+
+local function R_Manual(x)
+	local c = Instance.new("UICorner", x)
+	c.CornerRadius = UDim.new(0, 8)
+end
+R_Manual(manualMenu)
+
+--// Neon Outlines for Manual
+local manualStrokes = {}
+local function AddManualStroke(obj)
+	local s = Instance.new("UIStroke", obj)
+	s.Thickness = 2
+	table.insert(manualStrokes, s)
+	return s
+end
+AddManualStroke(manualMenu).Color = Color3.fromRGB(0, 255, 255)
+
+--// Title Bar for Manual
+local tm = Instance.new("TextLabel", manualMenu)
+tm.Size = UDim2.new(1, 0, 0, 30)
+tm.Text = "KRYZEN scripts"
+tm.TextColor3 = Color3.new(1, 1, 1)
+tm.TextStrokeTransparency = 1
+tm.Font = Enum.Font.GothamBlack
+tm.TextSize = 20 
+tm.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+R_Manual(tm)
+
+--// Minimize Logic for Manual (Now just hides it, reopen via Sidebar)
+local minimizeBtn = Instance.new("TextButton", tm)
+minimizeBtn.Size = UDim2.new(0, 30, 1, 0)
+minimizeBtn.Position = UDim2.new(1, -30, 0, 0)
+minimizeBtn.Text = "-"
+minimizeBtn.TextColor3 = Color3.new(1, 1, 1)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 22
+R_Manual(minimizeBtn)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	manualMenu.Visible = false
+end)
+
+--// Credits Subtitle for Manual
+local subM = Instance.new("TextLabel", manualMenu)
+subM.Size = UDim2.new(1, 0, 0, 20)
+subM.Position = UDim2.new(0, 0, 0, 30)
+subM.Text = "script made by: Juring978 in roblox"
+subM.TextColor3 = Color3.fromRGB(200, 200, 200)
+subM.BackgroundTransparency = 1
+subM.Font = Enum.Font.Gotham
+subM.TextSize = 12
+
+--// Manual Content (Scrolling)
+local scrollM = Instance.new("ScrollingFrame", manualMenu)
+scrollM.Size = UDim2.new(1, -20, 1, -65)
+scrollM.Position = UDim2.new(0, 10, 0, 55)
+scrollM.BackgroundTransparency = 1
+scrollM.BorderSizePixel = 0
+scrollM.ScrollBarThickness = 3
+scrollM.ScrollBarImageColor3 = Color3.fromRGB(0, 255, 255)
+scrollM.CanvasSize = UDim2.new(0, 0, 0, 650) 
+
+local manualTxt = Instance.new("TextLabel", scrollM)
+manualTxt.Size = UDim2.new(1, -5, 1, 0)
+manualTxt.BackgroundTransparency = 1
+manualTxt.TextColor3 = Color3.fromRGB(230, 230, 230)
+manualTxt.Font = Enum.Font.Gotham
+manualTxt.TextSize = 13
+manualTxt.TextWrapped = true
+manualTxt.TextXAlignment = Enum.TextXAlignment.Left
+manualTxt.TextYAlignment = Enum.TextYAlignment.Top
+manualTxt.RichText = true 
+
+manualTxt.Text = [[🚀 Getting Started: Script Hub Manual
+Welcome to the hub. Use this guide to understand how to toggle your enhancements and optimize your performance.
+
+🛡️ Combat & Movement
+Aimlock & FOV: Activate Aimlock to track targets. Toggle Show FOV in settings to see your targeting radius.
+Auto Block: Automatically mitigates incoming damage.
+Movement: Use Fly, Speedboost, and Jump Boost to navigate the map. Use Reset to instantly return to spawn.
+
+🎭 Visuals & Cosmetics
+Phantom Trails: Leave a physical trail behind your character. Choose from 4 distinct colors.
+Auras & Titles: Select from 6 unique Auras (visual effects) and 6 custom Titles that appear above your head.
+Note: If your frames are dropping, toggle Performance Mode in Settings.
+
+🎯 Targeting System
+To interact with other players, type their exact username into the text bar:
+Orbit: Spin rapidly around the target player.
+Fling: Launch the target into the stratosphere (requires physics collision).
+
+⚙️ Optimization & Settings
+Customise your experience with these 5 core toggles:
+Rainbow UI: Toggles the color-cycling border effect.
+Performance Mode: Disables Phantoms, Auras, and Particles for max FPS.
+UI Transparency: Switch between a solid dark or semi-transparent background.
+Lock Position: Disables UI dragging to prevent accidental movement.
+Streamer Mode: Blurs/Hides your username and target names.
+
+🎵 Music Player
+Input a Roblox Asset ID to play custom audio.
+Controls: Adjust Volume and Pitch/Speed in real-time.
+Requirement: Only IDs uploaded to the Roblox Creator Store/Studio will function due to privacy permissions.
+
+Pro Tip: If the UI feels cluttered, use the Lock Position feature once you've found your perfect layout to keep the screen clear during intense combat.]]
+
+--// Neon Outline Animation Loop for Manual
+task.spawn(function()
+	local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+	local purple = Color3.fromRGB(170, 0, 255)
+	local cyan = Color3.fromRGB(0, 255, 255)
+	while true do
+		for _, stroke in ipairs(manualStrokes) do
+			ts:Create(stroke, tweenInfo, { Color = cyan }):Play()
+		end
+		task.wait(1.5)
+		for _, stroke in ipairs(manualStrokes) do
+			ts:Create(stroke, tweenInfo, { Color = purple }):Play()
+		end
+		task.wait(1.5)
+	end
+end)
+
+-------------------------------------------------------------------
+-- SIDEBAR & RESTORE FUNCTIONALITY
+-------------------------------------------------------------------
+local sidebar = Instance.new("Frame", g)
+sidebar.Size = UDim2.new(0, 50, 0, 280)
+sidebar.Position = UDim2.new(0.92, 0, 0.5, -140)
+sidebar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+R_Corner(sidebar, 12)
+local neonStroke = Instance.new("UIStroke", sidebar)
+neonStroke.Thickness = 2.5
+neonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+table.insert(outlineStrokes, neonStroke)
+
+--// Restore/Open Button (Hidden by default)
+local restoreBtn = Instance.new("TextButton", g)
+restoreBtn.Name = "RestoreIcon"
+restoreBtn.Size = UDim2.new(0, 50, 0, 50)
+restoreBtn.Position = UDim2.new(0, 60, 0.5, -25) -- Fixed position on left side
+restoreBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+restoreBtn.Text = "❄️"
+restoreBtn.TextColor3 = Color3.new(1,1,1)
+restoreBtn.TextSize = 25
+restoreBtn.Visible = false
+R_Corner(restoreBtn, 12)
+
+local resStroke = Instance.new("UIStroke", restoreBtn)
+resStroke.Thickness = 2.5
+resStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+resStroke.Color = Color3.fromRGB(0, 255, 255)
+table.insert(outlineStrokes, resStroke) -- Syncs with Rainbow UI
+
+--// Visibility Logic
+local function ToggleVisibility(bool)
+    sidebar.Visible = bool
+    musicBar.Visible = bool
+    restoreBtn.Visible = not bool
+    
+    -- If minimizing (bool is false), force hide all sub-menus
+    if not bool then
+        mainMenu.Visible = false
+        powerSuite.Visible = false
+        settingsMenu.Visible = false
+        manualMenu.Visible = false
+    end
+end
+
+restoreBtn.MouseButton1Click:Connect(function()
+    ToggleVisibility(true)
+end)
+
+local layoutSide = Instance.new("UIListLayout", sidebar)
+layoutSide.Padding = UDim.new(0, 8); layoutSide.HorizontalAlignment = Enum.HorizontalAlignment.Center; layoutSide.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local function CreateSideBtn(icon, color, callback)
+    local b = Instance.new("TextButton", sidebar)
+    b.Size = UDim2.new(0, 38, 0, 38)
+    b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    b.Text = icon; b.TextColor3 = color; b.TextSize = 16; b.Font = Enum.Font.GothamBold
+    R_Corner(b, 8)
+    b.MouseButton1Click:Connect(callback)
+    return b
+end
+
+-- Create the dynamically changing stroke for active buttons
+local activeBtnStroke = Instance.new("UIStroke")
+activeBtnStroke.Thickness = 2.5
+activeBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+activeBtnStroke.Color = Color3.fromRGB(0, 255, 255)
+table.insert(outlineStrokes, activeBtnStroke) -- Syncs it with the Rainbow UI!
+
+local btnHome, btnCombat, btnPower, btnSettings
+
+btnHome = CreateSideBtn("🏠", Color3.fromRGB(255, 235, 150), function() 
+    activeBtnStroke.Parent = btnHome
+    manualMenu.Visible = not manualMenu.Visible
+    mainMenu.Visible = false
+    powerSuite.Visible = false
+    settingsMenu.Visible = false
+end)
+
+btnCombat = CreateSideBtn("⚔️", Color3.new(1,1,1), function() 
+    activeBtnStroke.Parent = btnCombat
+    mainMenu.Visible = not mainMenu.Visible
+    powerSuite.Visible = false 
+    settingsMenu.Visible = false
+    manualMenu.Visible = false
+end)
+
+btnPower = CreateSideBtn("⚡", Color3.fromRGB(255, 200, 50), function() 
+    activeBtnStroke.Parent = btnPower
+    powerSuite.Visible = not powerSuite.Visible
+    mainMenu.Visible = false 
+    settingsMenu.Visible = false
+    manualMenu.Visible = false
+end)
+
+btnSettings = CreateSideBtn("⚙️", Color3.fromRGB(200, 200, 200), function() 
+    activeBtnStroke.Parent = btnSettings
+    settingsMenu.Visible = not settingsMenu.Visible
+    mainMenu.Visible = false
+    powerSuite.Visible = false
+    manualMenu.Visible = false
+end)
+
+-- MODIFIED CLOSE BUTTON (Now Minimized)
+CreateSideBtn("❌", Color3.fromRGB(255, 80, 80), function() 
+    ToggleVisibility(false) 
+end)
+
+-------------------------------------------------------------------
+-- LOGIC & LOOPS
+-------------------------------------------------------------------
+uis.JumpRequest:Connect(function()
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local bv = Instance.new("BodyVelocity", p.Character.HumanoidRootPart)
+        bv.Velocity = Vector3.new(0, v_vals.Jump * 120, 0); bv.MaxForce = Vector3.new(0, 1e7, 0); db:AddItem(bv, 0.2)
+    end
+end)
+
+rs.RenderStepped:Connect(function()
+    aBtn.Text = "Aim: " .. (s_state.aim and "ON" or "OFF")
+    abBtn.Text = "Block: " .. (s_state.ab and "ON" or "OFF")
+    abFrame.BackgroundColor3 = s_state.ab and Color3.fromRGB(30, 170, 30) or Color3.fromRGB(50, 50, 50)
+    
+    if s_state.aim then
+        if not target or not target.Character or target.Character.Humanoid.Health <= 0 then
+            for _, plr in pairs(game.Players:GetPlayers()) do
+                if plr ~= p and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character.Humanoid.Health > 0 then target = plr break end
+            end
+        else cam.CFrame = CFrame.lookAt(cam.CFrame.Position, target.Character.HumanoidRootPart.Position) end
+    end
+
+    if s_state.ab then
+        pcall(function()
+            local hrp = p.Character.HumanoidRootPart; local near = false
+            for _, plr in pairs(game.Players:GetPlayers()) do
+                if plr ~= p and plr.Character and (plr.Character.HumanoidRootPart.Position - hrp.Position).Magnitude <= 15 then near = true break end
+            end
+            if near and not blk then blk = true; vi:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+            elseif not near and blk then blk = false; vi:SendKeyEvent(false, Enum.KeyCode.F, false, game) end
+        end)
+    end
+
+    for _, b in pairs(bars) do
+        local h_curr = p.Character and p.Character:FindFirstChild("Humanoid")
+        local val = (b.k == "Health" and h_curr) and h_curr.Health/h_curr.MaxHealth or v_vals[b.k]
+        b.f.Size = UDim2.new(1, 0, val, 0); b.f.Position = UDim2.new(0, 0, 1 - val, 0); b.t.Text = math.floor(val * 100) .. "%"
+        
+        -- FIXED SPEED LOGIC
+        -- Default WalkSpeed is 16. Range: 16 (0%) to 316 (100%)
+        if b.k == "Speed" and h_curr then 
+            h_curr.WalkSpeed = 16 + (v_vals.Speed * 300) 
+        end
+    end
+    
+    if afterimageActive and p.Character then
+        local root = p.Character:FindFirstChild("HumanoidRootPart")
+        if root and (root.Position - lastPhanPos).Magnitude > 3 then
+            lastPhanPos = root.Position
+            for _, obj in pairs(p.Character:GetChildren()) do
+                if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
+                    local ghost = Instance.new("Part", workspace); ghost.Size = obj.Size; ghost.CFrame = obj.CFrame; ghost.Anchored = true; ghost.CanCollide = false; ghost.Material = Enum.Material.SmoothPlastic; ghost.Color = curPhantomColor; ghost.Transparency = 0.7
+                    task.spawn(function() for i = 1, 15 do ghost.Transparency = 0.7 + (i / 50) task.wait(0.03) end ghost:Destroy() end)
+                end
+            end
+        end
+    end
+
+    local ping = math.floor(p:GetNetworkPing() * 1000)
+    pingLbl.Text = "Ping: " .. ping .. "ms | Server: " .. l.RobloxLocaleId
+end)
+
+-------------------------------------------------------------------
+-- POSITIONAL DRAGGING & COLOR CYCLE
+-------------------------------------------------------------------
+local function UpdatePositions()
+    local xOff, yOff = sidebar.Position.X.Offset, sidebar.Position.Y.Offset
+    local xScale, yScale = sidebar.Position.X.Scale, sidebar.Position.Y.Scale
+    
+    -- FIXED: manualMenu now uses the exact same position logic as other menus
+    mainMenu.Position = UDim2.new(xScale, xOff - 410, yScale, yOff)
+    powerSuite.Position = UDim2.new(xScale, xOff - 410, yScale, yOff)
+    settingsMenu.Position = UDim2.new(xScale, xOff - 410, yScale, yOff)
+    manualMenu.Position = UDim2.new(xScale, xOff - 410, yScale, yOff) 
+    
+    musicBar.Position = UDim2.new(mainMenu.Position.X.Scale, mainMenu.Position.X.Offset, mainMenu.Position.Y.Scale, mainMenu.Position.Y.Offset + 290)
+end
+UpdatePositions()
+
+local dragging, dragStart, startPosSide
+sidebar.InputBegan:Connect(function(input) 
+    -- Lock Position Check
+    if Settings.LockPosition then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
+        dragging = true; dragStart = input.Position; startPosSide = sidebar.Position 
+    end 
+end)
+uis.InputChanged:Connect(function(input) 
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        sidebar.Position = UDim2.new(startPosSide.X.Scale, startPosSide.X.Offset + delta.X, startPosSide.Y.Scale, startPosSide.Y.Offset + delta.Y)
+        UpdatePositions()
+    end 
+end)
+uis.InputEnded:Connect(function() dragging = false end)
+
+task.spawn(function()
+    local colors = {Color3.fromRGB(0, 255, 255), Color3.fromRGB(170, 0, 255), Color3.fromRGB(192, 192, 192)}
+    local i = 1
+    while true do
+        -- Rainbow UI Check
+        if Settings.RainbowUI then
+            local nextI = i % #colors + 1
+            for _, s in ipairs(outlineStrokes) do ts:Create(s, TweenInfo.new(2), {Color = colors[nextI]}):Play() end
+            i = nextI
+        end
+        task.wait(2)
+    end
+end)
